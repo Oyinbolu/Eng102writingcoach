@@ -1,9 +1,10 @@
 import streamlit as st
-import google.generativeai as genai
+from openai import OpenAI
 
-# --- 1. SETUP & BRANDING ---
+# --- 1. SETTINGS & BRANDING ---
 st.set_page_config(page_title="Scribacious AI", page_icon="🎓", layout="wide")
 
+# Custom CSS for OAU Navy/Gold Theme
 st.markdown("""
     <style>
     .stApp { background-color: #fdfdfd; }
@@ -12,73 +13,81 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DYNAMIC MODEL INITIALIZATION ---
-def get_working_model():
-    if "GOOGLE_API_KEY" not in st.secrets:
-        st.error("API Key missing! Add it to Streamlit Secrets.")
-        return None
-    
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    
-    # Logic to find a model that supports 'generateContent'
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                if 'gemini-1.5-flash' in m.name:
-                    return genai.GenerativeModel(m.name)
-        # Fallback to any gemini-pro model if flash isn't found
-        return genai.GenerativeModel('gemini-pro')
-    except Exception as e:
-        st.error(f"Failed to list models: {e}")
-        return None
-
-model = get_working_model()
+# --- 2. OPENROUTER CLIENT INITIALIZATION ---
+# Accessing the secret you are about to set
+if "OPENROUTER_API_KEY" in st.secrets:
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=st.secrets["OPENROUTER_API_KEY"],
+    )
+else:
+    st.error("Secret 'OPENROUTER_API_KEY' not found! Please check your Streamlit Settings.")
 
 # --- 3. UI LAYOUT ---
 st.markdown("<h1 class='title-text'>✍️ Scribacious AI: ENG 102 Coach</h1>", unsafe_allow_html=True)
+st.caption("<p style='text-align: center;'>Powered by OpenRouter | Specialized for OAU Standards</p>", unsafe_allow_html=True)
 
-col_settings, col_input = st.columns([1, 2], gap="large")
+col_ctrl, col_edit = st.columns([1, 2], gap="large")
 
-with col_settings:
-    st.subheader("Module Selection")
+with col_ctrl:
+    st.subheader("Writing Module")
     writing_task = st.selectbox(
-        "Focus Area:",
-        ["Mechanics of Writing", "Formal Letter", "Semi-Formal Letter", 
-         "Informal Letter", "Speech Writing", "Report Writing", 
-         "Internet Correspondence", "Register for Literacy"]
+        "Select your task:",
+        [
+            "Mechanics of Writing",
+            "Formal Letter Writing",
+            "Semi-Formal Letter",
+            "Informal Letter",
+            "Speech Writing",
+            "Report Writing",
+            "Internet Correspondence",
+            "Register as a Tool for Literacy"
+        ]
     )
-    st.info(f"Targeting OAU standards for: {writing_task}")
+    st.info(f"AI Persona: Senior Lecturer reviewing **{writing_task}**.")
 
-with col_input:
-    user_text = st.text_area("Paste your work:", height=400)
+with col_edit:
+    user_input = st.text_area("Paste your text here:", height=400, placeholder="Type your draft...")
 
     if st.button("🚀 Analyze with Scribacious"):
-        if not user_text.strip():
-            st.warning("Please enter text first.")
-        elif model is None:
-            st.error("AI Model not initialized. Check API key.")
+        if not user_input.strip():
+            st.warning("Please enter text before analyzing.")
         else:
             with st.spinner("Scribacious is reviewing your work..."):
+                # System instructions for high-quality feedback
                 system_prompt = f"""
-                You are Scribacious AI, an OAU English Lecturer. 
-                Evaluate this {writing_task} for ENG 102.
-                Check: Mechanics (Concord/Punctuation), Register, and Format.
+                You are Scribacious AI, a Senior Lecturer in English at Obafemi Awolowo University.
+                Task: Evaluate this ENG 102 student's submission for: {writing_task}.
+                
+                Analyze based on:
+                1. Mechanics (Concord, Punctuation, Spelling).
+                2. Register (Tone appropriateness for {writing_task}).
+                3. Structure (Standard conventions for the genre).
                 
                 Format:
                 # 📊 Score: [X]/100
                 ## 📝 Feedback
+                (Detailed critique)
                 ## ✅ Model Version
+                (The professionally rewritten version)
                 """
                 
                 try:
-                    # Combining prompt and text
-                    response = model.generate_content(f"{system_prompt}\n\nStudent Work: {user_text}")
+                    # Using Gemini 1.5 Flash via OpenRouter for speed and reliability
+                    response = client.chat.completions.create(
+                        model="google/gemini-flash-1.5",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_input}
+                        ]
+                    )
+                    
                     st.markdown("---")
-                    st.markdown(response.text)
+                    st.markdown(response.choices[0].message.content)
                     st.balloons()
+                    
                 except Exception as e:
-                    st.error(f"API Error: {e}")
-                    st.info("Try refreshing the page or checking your API key quota.")
+                    st.error(f"OpenRouter Error: {e}")
 
 st.markdown("---")
-st.caption("© 2026 Scribacious AI | OAU ENG 102 Project")
+st.caption("© 2026 Scribacious AI | Great Ife")
