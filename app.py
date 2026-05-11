@@ -1,39 +1,46 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Scribacious AI", page_icon="✍️", layout="wide")
+# --- 1. SETTINGS & BRANDING ---
+st.set_page_config(page_title="Scribacious AI", page_icon="🎓", layout="wide")
 
-# Custom Branding for OAU ENG 102
+# Custom CSS for OAU aesthetic
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stButton>button { width: 100%; border-radius: 5px; background-color: #002147; color: white; height: 3em; }
-    h1 { color: #002147; }
+    .main { background-color: #fdfdfd; }
+    .stTextArea textarea { font-size: 1.1rem !important; border: 1px solid #003366; }
+    .stButton button { background-color: #003366; color: white; border-radius: 10px; height: 3em; font-weight: bold; }
+    .title-text { color: #003366; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- API INITIALIZATION ---
+# --- 2. API CONFIGURATION & ERROR HANDLING ---
+# Accessing the key from Streamlit Cloud Secrets
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    # We use 'gemini-1.5-flash' which is the current stable name
+    # Fallback to 'gemini-pro' if 'flash' is unavailable in your region
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+    except:
+        model = genai.GenerativeModel('gemini-pro')
 else:
-    st.error("Missing API Key! Please add 'GOOGLE_API_KEY' to your Streamlit Secrets.")
+    st.error("API Key missing! Please add 'GOOGLE_API_KEY' to your Streamlit Secrets.")
 
-# --- APP UI ---
-st.title("🎓 Scribacious AI")
-st.subheader("Your Interactive ENG 102 Writing Coach")
+# --- 3. UI LAYOUT ---
+st.markdown("<h1 class='title-text'>✍️ Scribacious AI: ENG 102 Coach</h1>", unsafe_allow_html=True)
+st.caption("<p style='text-align: center;'>Interactive Writing Assistant for Obafemi Awolowo University Students</p>", unsafe_allow_html=True)
 
-# Use columns for a dynamic layout
-col_settings, col_input = st.columns([1, 2])
+col_ctrl, col_edit = st.columns([1, 2], gap="large")
 
-with col_settings:
-    st.write("### 🛠️ Configuration")
-    task_type = st.selectbox(
-        "Select Module:",
+with col_ctrl:
+    st.subheader("Target Module")
+    writing_task = st.selectbox(
+        "What are you writing?",
         [
             "Mechanics of Writing",
-            "Formal Letter",
+            "Formal Letter Writing",
             "Semi-Formal Letter",
             "Informal Letter",
             "Speech Writing",
@@ -43,53 +50,59 @@ with col_settings:
         ]
     )
     
-    st.markdown(f"""
-    **Current Focus:**
-    The AI is currently analyzing your work based on **{task_type}** standards used in OAU ENG 102.
+    st.info(f"Focusing on: **{writing_task}**")
+    st.markdown("""
+    **Evaluation Criteria:**
+    *   **Mechanics:** Punctuation/Concord.
+    *   **Register:** Appropriate tone.
+    *   **Format:** Structural accuracy.
     """)
 
-with col_input:
-    user_text = st.text_area("✍️ Write or paste your work here:", height=400)
-    
-    if st.button("🚀 Analyze Writing"):
-        if not user_text.strip():
-            st.warning("The workspace is empty. Please enter your text.")
-        else:
-            with st.spinner(f"Reviewing your {task_type}..."):
-                # SYSTEM PROMPT LOGIC
-                # This string tells Gemini exactly how to behave for each task.
-                system_instruction = f"""
-                You are Scribacious AI, an expert English Grammar and Composition tutor at OAU. 
-                Focus specifically on the following ENG 102 module: {task_type}.
-                
-                Strictly evaluate based on:
-                1. Mechanics (Concord, Punctuation, Spelling).
-                2. Structure (For letters: Addresses/Salutations; For reports: Heading/Findings).
-                3. Register: Tone and vocabulary appropriateness for {task_type}.
-                4. Literacy: How well it communicates the intended message.
+with col_edit:
+    user_input = st.text_area("Type or paste your work below:", height=450, placeholder="Example: Dear Sir, I am writing to...")
 
-                Output Format:
-                # 📊 Score: [Number]/100
-                ## 🔍 Detailed Analysis
-                - **Mechanics:** [Comment]
-                - **Register & Tone:** [Comment]
-                - **Formatting:** [Comment]
+    if st.button("🚀 Run Scribacious Analysis"):
+        if not user_input.strip():
+            st.warning("Please provide some text to analyze.")
+        else:
+            with st.spinner("Reviewing against OAU ENG 102 standards..."):
                 
-                ## ✅ The "Gold Standard" Rewrite
-                (Provide the most grammatically perfect and stylistically appropriate version of the student's text).
+                # The System Instruction is injected into the prompt
+                system_prompt = f"""
+                You are Scribacious AI, an expert Senior Lecturer in the English Department at OAU.
+                Analyze this student's submission for the ENG 102 module: {writing_task}.
+                
+                Strictly assess:
+                1. Mechanics: Check for concord errors, punctuation, and spelling.
+                2. Register: Ensure the tone matches {writing_task} requirements.
+                3. Structure: Verify if letters/reports/speeches follow standard formats.
+                4. Literacy: Evaluate clarity and expression.
+
+                Format your response exactly as:
+                # 📊 Overall Score: [X]/100
+                
+                ## ✅ Strengths
+                (What was done well)
+                
+                ## ⚠️ Corrections & Feedback
+                (Specific errors found in mechanics or register)
+                
+                ## 💡 The Model Version
+                (Provide a professionally rewritten version of their text)
                 """
                 
                 try:
-                    full_prompt = f"{system_instruction}\n\nStudent Text: {user_text}"
-                    response = model.generate_content(full_prompt)
+                    # Combining system prompt with student content
+                    response = model.generate_content(system_prompt + "\n\nStudent Work:\n" + user_input)
                     
-                    st.success("Analysis Complete!")
                     st.markdown("---")
                     st.markdown(response.text)
                     st.balloons()
+                    
                 except Exception as e:
                     st.error(f"Coding Error: {e}")
+                    st.info("Check your Streamlit Secrets and ensure the library version is updated in requirements.txt.")
 
+# --- 4. FOOTER ---
 st.markdown("---")
-st.caption("Developed for ENG 102 Students | Powered by Gemini 1.5 Flash")
-  
+st.center = st.write("© 2026 Scribacious AI | Introduction to English Grammar and Composition")
