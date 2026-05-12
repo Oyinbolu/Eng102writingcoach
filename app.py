@@ -1,93 +1,60 @@
 import streamlit as st
 from openai import OpenAI
 
-# --- 1. SETTINGS & BRANDING ---
-st.set_page_config(page_title="Scribacious AI", page_icon="🎓", layout="wide")
+# --- 1. CONFIGURATION & UI ---
+st.set_page_config(page_title="Scribacious AI", page_icon="🎓")
 
-# Custom CSS for OAU Navy/Gold Theme
 st.markdown("""
     <style>
     .stApp { background-color: #fdfdfd; }
-    .stButton button { background-color: #003366; color: white; border-radius: 10px; font-weight: bold; width: 100%; }
-    .title-text { color: #003366; text-align: center; }
+    .stButton button { background-color: #003366; color: white; width: 100%; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. OPENROUTER CLIENT INITIALIZATION ---
-# Accessing the secret you are about to set
+# --- 2. THE DIAGNOSTIC INITIALIZATION ---
 if "OPENROUTER_API_KEY" in st.secrets:
+    # We .strip() the key to remove accidental spaces from copy-pasting
+    raw_key = st.secrets["OPENROUTER_API_KEY"].strip()
+    
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=st.secrets["OPENROUTER_API_KEY"],
+        api_key=raw_key,
     )
 else:
-    st.error("Secret 'OPENROUTER_API_KEY' not found! Please check your Streamlit Settings.")
+    st.error("No API Key found in Streamlit Secrets.")
+    st.stop()
 
-# --- 3. UI LAYOUT ---
-st.markdown("<h1 class='title-text'>✍️ Scribacious AI: ENG 102 Coach</h1>", unsafe_allow_html=True)
-st.caption("<p style='text-align: center;'>Powered by OpenRouter | Specialized for OAU Standards</p>", unsafe_allow_html=True)
+# --- 3. APP INTERFACE ---
+st.title("✍️ Scribacious AI")
+writing_task = st.selectbox("Module:", ["Mechanics of Writing", "Formal Letter", "Speech Writing", "Report Writing"])
+user_input = st.text_area("Input text:", height=300)
 
-col_ctrl, col_edit = st.columns([1, 2], gap="large")
-
-with col_ctrl:
-    st.subheader("Writing Module")
-    writing_task = st.selectbox(
-        "Select your task:",
-        [
-            "Mechanics of Writing",
-            "Formal Letter Writing",
-            "Semi-Formal Letter",
-            "Informal Letter",
-            "Speech Writing",
-            "Report Writing",
-            "Internet Correspondence",
-            "Register as a Tool for Literacy"
-        ]
-    )
-    st.info(f"AI Persona: Senior Lecturer reviewing **{writing_task}**.")
-
-with col_edit:
-    user_input = st.text_area("Paste your text here:", height=400, placeholder="Type your draft...")
-
-    if st.button("🚀 Analyze with Scribacious"):
-        if not user_input.strip():
-            st.warning("Please enter text before analyzing.")
-        else:
-            with st.spinner("Scribacious is reviewing your work..."):
-                # System instructions for high-quality feedback
-                system_prompt = f"""
-                You are Scribacious AI, a Senior Lecturer in English at Obafemi Awolowo University.
-                Task: Evaluate this ENG 102 student's submission for: {writing_task}.
+if st.button("🚀 Analyze"):
+    if not user_input.strip():
+        st.warning("Please enter text first.")
+    else:
+        with st.spinner("Communicating with OpenRouter..."):
+            try:
+                # Try a very common model to ensure it's not a model-access issue
+                response = client.chat.completions.create(
+                    model="google/gemini-flash-1.5", 
+                    messages=[
+                        {"role": "system", "content": f"You are an OAU Lecturer. Review this {writing_task}."},
+                        {"role": "user", "content": user_input}
+                    ]
+                )
+                st.success("Analysis Complete!")
+                st.markdown(response.choices[0].message.content)
                 
-                Analyze based on:
-                1. Mechanics (Concord, Punctuation, Spelling).
-                2. Register (Tone appropriateness for {writing_task}).
-                3. Structure (Standard conventions for the genre).
+            except Exception as e:
+                st.error("⚠️ Connection Error")
+                # This detailed message helps us debug the 401
+                st.write(f"Server Response: {e}")
                 
-                Format:
-                # 📊 Score: [X]/100
-                ## 📝 Feedback
-                (Detailed critique)
-                ## ✅ Model Version
-                (The professionally rewritten version)
-                """
+                st.info("""
+                **Possible Fixes:**
+                1. **Credits:** OpenRouter requires a small balance ($1) for some models. Check your OpenRouter Credits.
+                2. **New Key:** Try generating a fresh key on OpenRouter.
+                3. **Format:** Ensure your secret is exactly: `OPENROUTER_API_KEY = "sk-or-v1-..."`
+                """)
                 
-                try:
-                    # Using Gemini 1.5 Flash via OpenRouter for speed and reliability
-                    response = client.chat.completions.create(
-                        model="google/gemini-flash-1.5",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_input}
-                        ]
-                    )
-                    
-                    st.markdown("---")
-                    st.markdown(response.choices[0].message.content)
-                    st.balloons()
-                    
-                except Exception as e:
-                    st.error(f"OpenRouter Error: {e}")
-
-st.markdown("---")
-st.caption("© 2026 Scribacious AI | Great Ife")
